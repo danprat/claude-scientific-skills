@@ -112,13 +112,15 @@ Each skill includes:
 
 ### Option 1: npx (all platforms)
 
-Install Scientific Agent Skills with a single command:
+Install this repository from GitHub with a single command:
 
 ```bash
-npx skills add K-Dense-AI/scientific-agent-skills
+npx skills add danprat/claude-scientific-skills
 ```
 
-This is the official standard approach for installing Agent Skills across **all platforms**, including **Claude Code**, **Claude Cowork**, **Codex**, **Gemini CLI**, **Cursor**, and any other agent that supports the open [Agent Skills](https://agentskills.io/) standard.
+This syntax is valid for the `skills` CLI and is the standard install path across **all platforms**, including **Claude Code**, **Claude Cowork**, **Codex**, **Gemini CLI**, **Cursor**, and any other agent that supports the open [Agent Skills](https://agentskills.io/) standard.
+
+It installs from the repository state available on GitHub, not from your local checkout. If you are working on an unmerged feature branch, this command will not automatically install that branch's local changes.
 
 ### Option 2: GitHub CLI (`gh skill`)
 
@@ -126,19 +128,21 @@ If you use the [GitHub CLI](https://cli.github.com/) (v2.90.0+), you can install
 
 ```bash
 # Browse and install interactively
-gh skill install K-Dense-AI/scientific-agent-skills
+gh skill install danprat/claude-scientific-skills
 
 # Install a specific skill directly
-gh skill install K-Dense-AI/scientific-agent-skills scanpy
+gh skill install danprat/claude-scientific-skills scanpy
 
 # Target a specific agent host
-gh skill install K-Dense-AI/scientific-agent-skills --agent cursor
-gh skill install K-Dense-AI/scientific-agent-skills --agent claude-code
-gh skill install K-Dense-AI/scientific-agent-skills --agent codex
-gh skill install K-Dense-AI/scientific-agent-skills --agent gemini
+gh skill install danprat/claude-scientific-skills --agent cursor
+gh skill install danprat/claude-scientific-skills --agent claude-code
+gh skill install danprat/claude-scientific-skills --agent codex
+gh skill install danprat/claude-scientific-skills --agent gemini
 ```
 
 `gh skill` automatically installs to the correct directory for your agent host and records provenance metadata for supply chain integrity.
+
+Like `npx skills add`, `gh skill install` resolves content from GitHub. For unreleased or branch-only changes, prefer a pinned commit SHA once that commit exists on GitHub.
 
 #### Version pinning
 
@@ -146,10 +150,10 @@ Pin to a specific release tag or commit SHA for reproducible installs:
 
 ```bash
 # Pin to a release tag
-gh skill install K-Dense-AI/scientific-agent-skills --pin v1.0.0
+gh skill install danprat/claude-scientific-skills --pin v1.0.0
 
 # Pin to a commit SHA
-gh skill install K-Dense-AI/scientific-agent-skills --pin abc123def
+gh skill install danprat/claude-scientific-skills --pin abc123def
 ```
 
 #### Keeping skills up to date
