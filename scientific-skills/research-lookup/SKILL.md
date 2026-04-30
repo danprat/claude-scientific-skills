@@ -1,9 +1,9 @@
 ---
 name: research-lookup
-description: Look up current research information using parallel-cli search (primary, fast web search), the Parallel Chat API (deep research), or Perplexity sonar-pro-search (academic paper searches). Automatically routes queries to the best backend. Use for finding papers, gathering research data, and verifying scientific information.
+description: Look up current research information using parallel-cli search (primary, fast web search), the Parallel Chat API (deep research), Exa semantic search (academic paper discovery), or Perplexity sonar-pro-search (academic fallback). Automatically routes queries to the best backend. Use for finding papers, gathering research data, and verifying scientific information.
 allowed-tools: Read Write Edit Bash
 license: MIT license
-compatibility: parallel-cli required (primary); PARALLEL_API_KEY and OPENROUTER_API_KEY optional for deep/academic backends
+compatibility: parallel-cli required (primary); PARALLEL_API_KEY, EXA_API_KEY, and OPENROUTER_API_KEY optional for deep/academic backends
 metadata:
     skill-author: K-Dense Inc.
 ---
@@ -16,7 +16,8 @@ This skill provides real-time research information lookup with **intelligent bac
 
 - **parallel-cli search** (parallel-web skill): **Primary and default backend** for all research queries. Fast, cost-effective web search with academic source prioritization. Uses `parallel-cli search` with `--include-domains` for scholarly sources.
 - **Parallel Chat API** (`core` model): Secondary backend for complex, multi-source deep research requiring extended synthesis (60s-5min latency). Use only when explicitly needed.
-- **Perplexity sonar-pro-search** (via OpenRouter): Used only for academic-specific paper searches where scholarly database access is critical.
+- **Exa semantic search**: Preferred backend for academic paper discovery, literature search, and ranked source retrieval when `EXA_API_KEY` is available.
+- **Perplexity sonar-pro-search** (via OpenRouter): Academic fallback when Exa is unavailable or when a synthesized academic response is preferable.
 
 The skill automatically detects query type and routes to the optimal backend.
 
@@ -55,11 +56,12 @@ The skill automatically routes queries to the best backend based on content:
 ```
 Query arrives
     |
-    +-- Contains academic keywords? (papers, DOI, journal, peer-reviewed, etc.)
-    |       YES --> Perplexity sonar-pro-search (academic search mode)
-    |
     +-- Needs deep multi-source synthesis? (user says "deep research", "exhaustive")
     |       YES --> Parallel Chat API (core model, 60s-5min)
+    |
+    +-- Contains academic keywords? (papers, DOI, journal, peer-reviewed, etc.)
+    |       YES --> Exa semantic search
+    |                 --> Fallback: Perplexity sonar-pro-search
     |
     +-- Everything else (general research, market data, technical info, analysis)
             --> parallel-cli search (fast, default)
@@ -100,9 +102,9 @@ All other queries route here by default, including:
 - Statistical data retrieval
 - Fact-checking and verification
 
-### Academic Keywords (Routes to Perplexity)
+### Academic Discovery Keywords (Routes to Exa, then Perplexity fallback)
 
-Queries containing these terms are routed to Perplexity for academic-focused search:
+Queries containing these terms are routed to Exa for academic-focused source discovery when `EXA_API_KEY` is available. If Exa is unavailable, the skill falls back to Perplexity.
 
 - Paper finding: `find papers`, `find articles`, `research papers on`, `published studies`
 - Citations: `cite`, `citation`, `doi`, `pubmed`, `pmid`
@@ -124,6 +126,9 @@ parallel-cli search "your query" -q "keyword" --json --max-results 10 -o sources
 
 # Force Parallel Deep Research (slow, exhaustive)
 python research_lookup.py "your query" --force-backend parallel
+
+# Force Exa semantic paper discovery
+python research_lookup.py "your query" --force-backend exa
 
 # Force Perplexity academic search
 python research_lookup.py "your query" --force-backend perplexity
@@ -166,9 +171,9 @@ parallel-cli search "Recent advances in CRISPR gene editing 2025" \
 - Specific facts, numbers, and dates
 - Sources section listing all referenced URLs grouped by type
 
-### 2. Academic Paper Search (Perplexity sonar-pro-search)
+### 2. Academic Paper Discovery (Exa semantic search, Perplexity fallback)
 
-**Used for academic-specific queries.** Prioritizes scholarly databases and peer-reviewed sources. Use when queries specifically ask for papers, citations, or DOIs.
+**Used for academic-specific queries.** Exa is preferred for ranked scholarly source discovery. Perplexity remains the fallback when Exa is unavailable.
 
 ```
 Query Examples:
@@ -180,11 +185,10 @@ Query Examples:
 ```
 
 **Response includes:**
-- Summary of key findings from academic literature
-- 5-8 high-quality citations with authors, titles, journals, years, DOIs
-- Citation counts and venue tier indicators
-- Key statistics and methodology highlights
-- Research gaps and future directions
+- Ranked paper results with authors, publication dates, and URLs
+- Highlights or summaries for each result
+- Academic metadata suitable for follow-up review and citation work
+- Perplexity fallback summary when Exa is unavailable
 
 ### 3. Deep Research (Parallel Chat API — on request only)
 
@@ -277,6 +281,9 @@ export PARALLEL_API_KEY="your_parallel_api_key"
 # Deep research backend (Parallel Chat API) - optional, for deep research only
 # Uses the same PARALLEL_API_KEY
 
+# Academic paper discovery backend (Exa) - optional, preferred for academic queries
+export EXA_API_KEY="your_exa_api_key"
+
 # Academic search backend (Perplexity) - optional, for academic paper queries
 export OPENROUTER_API_KEY="your_openrouter_api_key"
 ```
@@ -297,6 +304,13 @@ export OPENROUTER_API_KEY="your_openrouter_api_key"
 - Citations: Research basis with URLs, reasoning, and confidence levels
 - Rate limits: 300 req/min
 - Python package: `openai`
+
+**Exa semantic search (academic discovery preferred):**
+- Endpoint: `https://api.exa.ai/search`
+- Auth: `x-api-key: $EXA_API_KEY`
+- Search category: `research paper`
+- Output: Ranked results with title, URL, published date, author, and highlights
+- Best for: Paper discovery, literature search, and quick source ranking
 
 **Perplexity sonar-pro-search (academic only):**
 - Model: `perplexity/sonar-pro-search` (via OpenRouter)
@@ -329,6 +343,9 @@ parallel-cli extract "https://example.com/paper" --json
 # Force Parallel Deep Research (slow, exhaustive) — via research_lookup.py
 python research_lookup.py "your query" --force-backend parallel -o sources/research_<topic>.md
 
+# Force Exa academic paper discovery — via research_lookup.py
+python research_lookup.py "your query" --force-backend exa -o sources/papers_<topic>.md
+
 # Force Perplexity academic search — via research_lookup.py
 python research_lookup.py "your query" --force-backend perplexity -o sources/papers_<topic>.md
 
@@ -353,6 +370,7 @@ This is non-negotiable. Research results are expensive to obtain and critical fo
 |---------|-----------------|------------------|
 | parallel-cli search (default) | `sources/research_<topic>.json` | `research_<brief_topic>.json` or `research_<brief_topic>-academic.json` |
 | Parallel Deep Research | `sources/research_<topic>.md` | `research_YYYYMMDD_HHMMSS_<brief_topic>.md` |
+| Exa semantic search | `sources/papers_<topic>.md` | `papers_YYYYMMDD_HHMMSS_<brief_topic>.md` |
 | Perplexity (academic) | `sources/papers_<topic>.md` | `papers_YYYYMMDD_HHMMSS_<brief_topic>.md` |
 | Batch queries | `sources/batch_<topic>.md` | `batch_research_YYYYMMDD_HHMMSS_<brief_topic>.md` |
 

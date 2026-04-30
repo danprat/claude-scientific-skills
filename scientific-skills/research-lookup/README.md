@@ -1,22 +1,28 @@
 # Research Lookup Skill
 
-This skill provides real-time research information lookup using Perplexity's Sonar Pro Search model through OpenRouter.
+This skill provides real-time research information lookup using three backends:
+
+- `parallel-cli search` for fast default web research
+- Parallel Chat API for deep multi-source synthesis
+- Exa semantic search for academic paper discovery, with OpenRouter Perplexity as academic fallback
 
 ## Setup
 
-1. **Get OpenRouter API Key:**
-   - Visit [openrouter.ai](https://openrouter.ai)
-   - Create account and generate API key
-   - Add credits to your account
+1. **Choose the backends you want enabled:**
+   - `PARALLEL_API_KEY` for Parallel Chat API
+   - `EXA_API_KEY` for Exa semantic search
+   - `OPENROUTER_API_KEY` for Perplexity academic fallback
 
 2. **Configure Environment:**
    ```bash
-   export OPENROUTER_API_KEY="your_api_key_here"
+   export PARALLEL_API_KEY="your_parallel_key_here"
+   export EXA_API_KEY="your_exa_key_here"
+   export OPENROUTER_API_KEY="your_openrouter_key_here"
    ```
 
 3. **Test Setup:**
    ```bash
-   python scripts/research_lookup.py --model-info
+   python scripts/research_lookup.py "find papers on CRISPR gene editing"
    ```
 
 ## Usage
@@ -26,6 +32,9 @@ This skill provides real-time research information lookup using Perplexity's Son
 ```bash
 # Single research query
 python scripts/research_lookup.py "Recent advances in CRISPR gene editing 2024"
+
+# Force Exa paper discovery
+python scripts/research_lookup.py "Foundational papers on quantum error correction" --force-backend exa
 
 # Multiple queries with delay
 python scripts/research_lookup.py --batch "CRISPR applications" "gene therapy trials" "ethical considerations"
@@ -45,13 +54,14 @@ The research lookup tool is automatically available in Claude Code when you:
 
 ## Features
 
+- **Multi-backend routing:** Chooses between Parallel, Exa, and Perplexity based on query intent
 - **Academic Focus:** Prioritizes peer-reviewed papers and reputable sources
 - **Current Information:** Focuses on recent publications (2020-2024)
 - **Complete Citations:** Provides full bibliographic information with DOIs
 - **Multiple Formats:** Supports various query types and research needs
-- **High Search Context:** Always uses high search context for deeper, more comprehensive research
+- **Deep Research:** Uses Parallel Chat API when the query explicitly asks for exhaustive synthesis
 - **Quality Prioritization:** Automatically prioritizes highly-cited papers from top venues
-- **Cost Effective:** Typically $0.01-0.05 per research query
+- **Cost Effective:** Lets you reserve more expensive backends for the queries that need them
 
 ## Paper Quality Prioritization
 
@@ -130,12 +140,12 @@ This skill enhances the scientific writing process by providing:
 ## Troubleshooting
 
 **"API key not found"**
-- Ensure `OPENROUTER_API_KEY` environment variable is set
-- Check that you have credits in your OpenRouter account
+- Ensure at least one of `PARALLEL_API_KEY`, `EXA_API_KEY`, or `OPENROUTER_API_KEY` is set
+- Check that the key for your chosen backend is valid and funded
 
 **"Model not available"**
-- Verify your API key has access to Perplexity models
-- Check OpenRouter status page for service issues
+- Verify the selected backend is enabled for your key
+- Check provider status pages for service issues
 
 **"Rate limit exceeded"**
 - Add delays between requests using `--delay` option
@@ -148,8 +158,8 @@ This skill enhances the scientific writing process by providing:
 
 ## Cost Management
 
-- Monitor usage through OpenRouter dashboard
-- Typical costs: $0.01-0.05 per research query
+- Monitor usage through the provider dashboard you are using
+- Exa and OpenRouter are best reserved for academic discovery workflows
 - Batch processing available for multiple queries
 - Consider query specificity to optimize token usage
 

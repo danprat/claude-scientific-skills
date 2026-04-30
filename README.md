@@ -241,6 +241,81 @@ uv --version
 
 For more installation options and details, visit the [official uv documentation](https://docs.astral.sh/uv/).
 
+## 🔐 Credential Setup
+
+Some skills call external APIs or connect to scientific platforms that require authentication. The default local setup for this repository is:
+
+1. Copy [.env.example](.env.example) to `.env` in the repository root.
+2. Fill only the keys you actually need.
+3. Keep secrets out of source control. This repo already ignores `.env` in [.gitignore](.gitignore).
+
+```bash
+cp .env.example .env
+```
+
+Many skills already follow the same lookup order internally: environment variable first, then `.env` in the current working directory.
+
+### Common keys
+
+| Use case | Typical variables |
+|---|---|
+| AI generation and review | `OPENROUTER_API_KEY`, `OPENAI_API_KEY` |
+| Research and web search | `PARALLEL_API_KEY`, `EXA_API_KEY`, `OPENROUTER_API_KEY` |
+| Literature APIs | `NCBI_API_KEY`, `CORE_API_KEY`, `S2_API_KEY`, `OPENALEX_API_KEY` |
+| Database-specific access | `FRED_API_KEY`, `OPENFDA_API_KEY`, `MP_API_KEY`, and other keys listed in `scientific-skills/database-lookup/SKILL.md` |
+| Benchling | `BENCHLING_API_KEY`, `BENCHLING_TENANT_URL` |
+| Adaptyv | `ADAPTYV_API_KEY`, `ADAPTYV_API_URL` |
+| Modal local auth | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` |
+
+### Skills that use `OPENROUTER_API_KEY`
+
+| Skill | What the key enables | Usage type |
+|---|---|---|
+| `research-lookup` | Perplexity academic search when Exa is unavailable or a synthesized fallback is needed | Academic search fallback |
+| `generate-image` | General image generation and editing workflows | Image generation |
+| `infographics` | AI-generated infographic visuals and review loops | Image generation |
+| `scientific-slides` | Slide visuals generated for PDF and deck workflows | Presentation visuals |
+| `scientific-schematics` | Publication-style diagrams and technical schematics | Diagram generation |
+| `scientific-writing` | Figures and schematics embedded into manuscript workflows | Writing visuals |
+| `markitdown` | AI image understanding during document-to-Markdown conversion | AI document conversion |
+| `peer-review` | Review-support schematics generated from the shared schematic helper | Diagram generation |
+| `clinical-decision-support` | Clinical workflow and decision-support schematics | Diagram generation |
+| `clinical-reports` | Report figures and explanatory schematics | Diagram generation |
+| `hypothesis-generation` | Mechanism and experiment schematics for hypothesis framing | Diagram generation |
+| `citation-management` | Citation or literature workflow schematics | Diagram generation |
+| `scholar-evaluation` | Evaluation flow diagrams and related visuals | Diagram generation |
+| `literature-review` | Review workflow diagrams and explanatory figures | Diagram generation |
+| `latex-posters` | Poster-ready schematics and visual panels | Diagram generation |
+| `pptx-posters` | Poster slide visuals and schematics | Diagram generation |
+| `research-grants` | Grant visuals, study design diagrams, and figures | Diagram generation |
+| `treatment-plans` | Treatment pathway and decision schematics | Diagram generation |
+| `scientific-critical-thinking` | Reasoning and comparison schematics | Diagram generation |
+| `venue-templates` | Venue-specific diagram assets that reuse the schematic generator | Diagram generation |
+
+Most of the diagram-focused rows above share the same OpenRouter-backed schematic helper pattern, but they are listed individually here so credential audits can stay skill-specific.
+
+### Auth patterns that do not primarily use `.env`
+
+- **LatchBio**: authenticate with `latch login`.
+- **Modal production secrets**: prefer Modal Secret objects over local `.env` when running in Modal.
+- **LabArchives**: generate a local `config.yaml` with `scientific-skills/labarchive-integration/scripts/setup_config.py`.
+- **OMERO**: requires server connection details and user credentials; this repo now documents a local `.env` convention in [.env.example](.env.example), but the skill itself only requires valid host, port, username, and password.
+- **Protocols.io**: uses bearer tokens, but the repo does not yet enforce one canonical environment variable name across all workflows.
+
+### Minimal starting point
+
+If you want the smallest useful setup, start with:
+
+```dotenv
+OPENROUTER_API_KEY=
+PARALLEL_API_KEY=
+EXA_API_KEY=
+NCBI_API_KEY=
+CORE_API_KEY=
+```
+
+Then add platform-specific credentials only when you use the corresponding skill.
+
 ---
 
 ## 💡 Quick Examples

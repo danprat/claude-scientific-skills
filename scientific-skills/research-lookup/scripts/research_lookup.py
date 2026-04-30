@@ -3,12 +3,14 @@
 Research Information Lookup Tool
 
 Routes research queries to the best backend:
-  - Parallel Chat API (core model): Default for all general research queries
-  - Perplexity sonar-pro-search (via OpenRouter): Academic-specific paper searches
+    - Parallel Chat API (core model): Default for deep multi-source synthesis
+    - Exa semantic search: Academic paper discovery and literature search
+    - Perplexity sonar-pro-search (via OpenRouter): Academic fallback search
 
 Environment variables:
-  PARALLEL_API_KEY    - Required for Parallel Chat API (primary backend)
-  OPENROUTER_API_KEY  - Required for Perplexity academic searches (fallback)
+    PARALLEL_API_KEY   - Required for Parallel Chat API (primary backend)
+    EXA_API_KEY        - Required for Exa semantic literature search
+    OPENROUTER_API_KEY - Required for Perplexity academic searches (fallback)
 """
 
 import os
@@ -24,8 +26,8 @@ from typing import Any, Dict, List, Optional
 class ResearchLookup:
     """Research information lookup with intelligent backend routing.
 
-    Routes queries to the Parallel Chat API (default) or Perplexity
-    sonar-pro-search (academic paper searches only).
+    Routes queries to the Parallel Chat API, Exa semantic search,
+    or Perplexity sonar-pro-search based on user intent.
     """
 
     ACADEMIC_KEYWORDS = [
@@ -44,6 +46,16 @@ class ResearchLookup:
         "highly cited", "most cited",
     ]
 
+    DEEP_RESEARCH_KEYWORDS = [
+        "deep research",
+        "deep dive",
+        "exhaustive",
+        "comprehensive research",
+        "comprehensive review",
+        "multi-source synthesis",
+        "extensive analysis",
+    ]
+
     PARALLEL_SYSTEM_PROMPT = (
         "You are a deep research analyst. Provide a comprehensive, well-cited "
         "research report on the user's topic. Include:\n"
@@ -57,35 +69,47 @@ class ResearchLookup:
     )
 
     CHAT_BASE_URL = "https://api.parallel.ai"
+    EXA_SEARCH_URL = "https://api.exa.ai/search"
 
     def __init__(self, force_backend: Optional[str] = None):
         """Initialize the research lookup tool.
 
         Args:
-            force_backend: Force a specific backend ('parallel' or 'perplexity').
+            force_backend: Force a specific backend ('parallel', 'exa', or
+                          'perplexity').
                           If None, backend is auto-selected based on query content.
         """
         self.force_backend = force_backend
         self.parallel_available = bool(os.getenv("PARALLEL_API_KEY"))
+        self.exa_available = bool(os.getenv("EXA_API_KEY"))
         self.perplexity_available = bool(os.getenv("OPENROUTER_API_KEY"))
 
-        if not self.parallel_available and not self.perplexity_available:
+        if not self.parallel_available and not self.exa_available and not self.perplexity_available:
             raise ValueError(
                 "No API keys found. Set at least one of:\n"
                 "  PARALLEL_API_KEY (for Parallel Chat API - primary)\n"
+                "  EXA_API_KEY (for Exa semantic literature search)\n"
                 "  OPENROUTER_API_KEY (for Perplexity academic search - fallback)"
             )
 
     def _select_backend(self, query: str) -> str:
         """Select the best backend for a query."""
         if self.force_backend:
+            if self.force_backend == "exa" and self.exa_available:
+                return "exa"
             if self.force_backend == "perplexity" and self.perplexity_available:
                 return "perplexity"
             if self.force_backend == "parallel" and self.parallel_available:
                 return "parallel"
 
-        query_lower = query.lower()
-        is_academic = any(kw in query_lower for kw in self.ACADEMIC_KEYWORDS)
+        is_academic = self._is_academic_query(query)
+        is_deep_research = self._is_deep_research_query(query)
+
+        if is_deep_research and self.parallel_available:
+            return "parallel"
+
+        if is_academic and self.exa_available:
+            return "exa"
 
         if is_academic and self.perplexity_available:
             return "perplexity"
@@ -93,10 +117,23 @@ class ResearchLookup:
         if self.parallel_available:
             return "parallel"
 
+        if self.exa_available:
+            return "exa"
+
         if self.perplexity_available:
             return "perplexity"
 
         raise ValueError("No backend available. Check API keys.")
+
+    def _is_academic_query(self, query: str) -> bool:
+        """Return whether a query looks like academic literature discovery."""
+        query_lower = query.lower()
+        return any(kw in query_lower for kw in self.ACADEMIC_KEYWORDS)
+
+    def _is_deep_research_query(self, query: str) -> bool:
+        """Return whether a query explicitly requests exhaustive synthesis."""
+        query_lower = query.lower()
+        return any(kw in query_lower for kw in self.DEEP_RESEARCH_KEYWORDS)
 
     # ------------------------------------------------------------------
     # Parallel Chat API backend
@@ -193,6 +230,145 @@ class ResearchLookup:
                         })
 
         return citations
+
+    # ------------------------------------------------------------------
+    # Exa semantic search backend
+    # ------------------------------------------------------------------
+
+    def _exa_lookup(self, query: str) -> Dict[str, Any]:
+        """Run semantic literature search via Exa search API."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        api_key = os.getenv("EXA_API_KEY")
+
+        headers = {
+            "x-api-key": api_key,
+            "Content-Type": "application/json",
+        }
+        data = {
+            "query": query,
+            "type": "auto",
+            "numResults": 8,
+            "contents": {
+                "highlights": {
+                    "maxCharacters": 600,
+                }
+            },
+        }
+        if self._is_academic_query(query):
+            data["category"] = "research paper"
+
+        try:
+            response = requests.post(
+                self.EXA_SEARCH_URL,
+                headers=headers,
+                json=data,
+                timeout=60,
+            )
+            response.raise_for_status()
+            resp_json = response.json()
+
+            results = resp_json.get("results") or []
+            if not results:
+                raise Exception("No search results received from Exa")
+
+            sources = self._extract_exa_sources(results)
+            search_type = resp_json.get("searchType") or data["type"]
+            content = self._format_exa_response(query, results, search_type)
+
+            return {
+                "success": True,
+                "query": query,
+                "response": content,
+                "citations": sources,
+                "sources": sources,
+                "timestamp": timestamp,
+                "backend": "exa",
+                "model": f"exa-search/{search_type}",
+                "usage": resp_json.get("costDollars", {}),
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "query": query,
+                "error": str(e),
+                "timestamp": timestamp,
+                "backend": "exa",
+                "model": "exa-search/auto",
+            }
+
+    def _extract_exa_sources(self, results: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        """Normalize Exa search results into the shared source schema."""
+        citations = []
+
+        for result in results:
+            citation = {
+                "type": "source",
+                "title": result.get("title", ""),
+                "url": result.get("url", ""),
+                "date": result.get("publishedDate", ""),
+            }
+            if result.get("author"):
+                citation["author"] = result["author"]
+
+            snippet = result.get("summary")
+            if not snippet:
+                highlights = result.get("highlights") or []
+                if highlights:
+                    snippet = highlights[0]
+            if snippet:
+                citation["snippet"] = snippet
+
+            citations.append(citation)
+
+        return citations
+
+    def _format_exa_response(
+        self,
+        query: str,
+        results: List[Dict[str, Any]],
+        search_type: str,
+    ) -> str:
+        """Render Exa results as markdown for CLI and downstream consumption."""
+        lines = [
+            f"Exa semantic literature search for: {query}",
+            "",
+            f"Search type: {search_type}",
+            "",
+            "Top results:",
+            "",
+        ]
+
+        for index, result in enumerate(results, start=1):
+            title = result.get("title") or "Untitled"
+            url = result.get("url") or ""
+            author = result.get("author") or ""
+            published = result.get("publishedDate") or ""
+            published_short = published[:10] if published else ""
+
+            lines.append(f"{index}. {title}")
+
+            metadata_parts = [part for part in [author, published_short] if part]
+            if metadata_parts:
+                lines.append(f"   - {' | '.join(metadata_parts)}")
+            if url:
+                lines.append(f"   - {url}")
+
+            snippet = result.get("summary")
+            if not snippet:
+                highlights = result.get("highlights") or []
+                if highlights:
+                    snippet = highlights[0]
+            if not snippet:
+                snippet = result.get("text", "")
+
+            if snippet:
+                normalized = " ".join(snippet.split())
+                lines.append(f"   - {normalized[:600]}")
+
+            lines.append("")
+
+        return "\n".join(lines).strip()
 
     # ------------------------------------------------------------------
     # Perplexity academic search backend
@@ -408,14 +584,16 @@ Remember: Quality over quantity. Prioritize influential, highly-cited papers fro
     def lookup(self, query: str) -> Dict[str, Any]:
         """Perform a research lookup, routing to the best backend.
 
-        Parallel Chat API is used by default. Perplexity sonar-pro-search
-        is used only for academic-specific queries (paper searches, DOI lookups).
+        Parallel Chat API is used for deep multi-source synthesis. Exa semantic
+        search is preferred for academic paper discovery when available.
         """
         backend = self._select_backend(query)
         print(f"[Research] Backend: {backend} | Query: {query[:80]}...", file=sys.stderr)
 
         if backend == "parallel":
             return self._parallel_lookup(query)
+        if backend == "exa":
+            return self._exa_lookup(query)
         else:
             return self._perplexity_lookup(query)
 
@@ -440,18 +618,22 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Research Information Lookup Tool (Parallel Chat API + Perplexity)",
+                description=(
+                        "Research Information Lookup Tool "
+                        "(Parallel Chat API + Exa + Perplexity)"
+                ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # General research (uses Parallel Chat API, core model)
+    # General or deep research (uses Parallel Chat API, core model)
   python research_lookup.py "latest advances in quantum computing 2025"
 
-  # Academic paper search (auto-routes to Perplexity)
+    # Academic paper search (auto-routes to Exa when available)
   python research_lookup.py "find papers on CRISPR gene editing clinical trials"
 
   # Force a specific backend
   python research_lookup.py "topic" --force-backend parallel
+    python research_lookup.py "topic" --force-backend exa
   python research_lookup.py "topic" --force-backend perplexity
 
   # Save output to file
@@ -465,7 +647,7 @@ Examples:
     parser.add_argument("--batch", nargs="+", help="Run multiple queries")
     parser.add_argument(
         "--force-backend",
-        choices=["parallel", "perplexity"],
+        choices=["parallel", "exa", "perplexity"],
         help="Force a specific backend (default: auto-select)",
     )
     parser.add_argument("-o", "--output", help="Write output to file")
@@ -484,10 +666,12 @@ Examples:
             print(text)
 
     has_parallel = bool(os.getenv("PARALLEL_API_KEY"))
+    has_exa = bool(os.getenv("EXA_API_KEY"))
     has_perplexity = bool(os.getenv("OPENROUTER_API_KEY"))
-    if not has_parallel and not has_perplexity:
+    if not has_parallel and not has_exa and not has_perplexity:
         print("Error: No API keys found. Set at least one:", file=sys.stderr)
         print("  export PARALLEL_API_KEY='...'    (primary - Parallel Chat API)", file=sys.stderr)
+        print("  export EXA_API_KEY='...'         (semantic literature search)", file=sys.stderr)
         print("  export OPENROUTER_API_KEY='...'   (fallback - Perplexity academic)", file=sys.stderr)
         if output_file:
             output_file.close()
